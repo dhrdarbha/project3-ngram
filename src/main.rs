@@ -28,15 +28,9 @@ enum Commands {
 
 #[derive(Subcommand, Debug)]
 enum ClientOperation {
-    Publish {
-        path: String,
-    },
-    Search {
-        word: String,
-    },
-    Retrieve {
-        id: usize,
-    },
+    Publish { path: String },
+    Search { word: String },
+    Retrieve { id: usize },
 }
 
 // TODO:

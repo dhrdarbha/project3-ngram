@@ -158,9 +158,7 @@ impl Response {
 
                 Some(Response::RetrieveSuccess(doc))
             }
-            3 => {
-                Some(Response::Failure)
-            }
+            3 => Some(Response::Failure),
             _ => None,
         }
     }

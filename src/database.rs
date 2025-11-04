@@ -62,3 +62,9 @@ impl Database {
         blob_store.get(id).cloned()
     }
 }
+
+impl Default for Database {
+    fn default() -> Self {
+        Self::new()
+    }
+}

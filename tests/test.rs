@@ -19,8 +19,8 @@ mod test_multimap {
     fn test_get_after_set_single_5() {
         fn get_after_set_single(k: i32, v: usize) {
             let map = ConcurrentMultiMap::<UnCloneable, usize>::new(10);
-            map.set(UnCloneable(k), v as usize);
-            assert_eq!(map.get(&UnCloneable(k)), vec![v as usize]);
+            map.set(UnCloneable(k), v);
+            assert_eq!(map.get(&UnCloneable(k)), vec![v]);
         }
         quickcheck(get_after_set_single as fn(i32, usize));
     }
@@ -30,7 +30,7 @@ mod test_multimap {
         fn get_after_set_multi(k: i32, values: HashSet<usize>) {
             let map = ConcurrentMultiMap::<UnCloneable, usize>::new(10);
             for values in values.iter() {
-                map.set(UnCloneable(k), *values as usize);
+                map.set(UnCloneable(k), *values);
             }
             let result = map.get(&UnCloneable(k));
             println!("+==================+");
@@ -39,7 +39,7 @@ mod test_multimap {
             println!("{:?}", result);
             assert_eq!(result.len(), values.len());
             for values in values.iter() {
-                assert!(result.contains(&(*values as usize)));
+                assert!(result.contains(values));
             }
         }
         quickcheck(get_after_set_multi as fn(i32, HashSet<usize>));
@@ -49,10 +49,10 @@ mod test_multimap {
         fn get_from_large_map(k: i32, v: usize, others: Vec<(i32, usize)>) {
             let map = ConcurrentMultiMap::<UnCloneable, usize>::new(1000);
             for (k, v) in others.iter() {
-                map.set(UnCloneable(*k), *v as usize);
+                map.set(UnCloneable(*k), *v);
             }
-            map.set(UnCloneable(k), v as usize);
-            assert!(map.get(&UnCloneable(k)).contains(&(v as usize)));
+            map.set(UnCloneable(k), v);
+            assert!(map.get(&UnCloneable(k)).contains(&v));
         }
         quickcheck(get_from_large_map as fn(i32, usize, Vec<(i32, usize)>));
     }
@@ -60,11 +60,11 @@ mod test_multimap {
     fn test_no_duplicates_5() {
         fn no_duplicates(k: i32, v: usize) {
             let map = ConcurrentMultiMap::<UnCloneable, usize>::new(10);
-            map.set(UnCloneable(k), v as usize);
-            map.set(UnCloneable(k), v as usize);
-            map.set(UnCloneable(k), v as usize);
-            map.set(UnCloneable(k), v as usize);
-            assert_eq!(map.get(&UnCloneable(k)), vec![v as usize]);
+            map.set(UnCloneable(k), v);
+            map.set(UnCloneable(k), v);
+            map.set(UnCloneable(k), v);
+            map.set(UnCloneable(k), v);
+            assert_eq!(map.get(&UnCloneable(k)), vec![v]);
         }
         quickcheck(no_duplicates as fn(i32, usize));
     }
@@ -85,7 +85,7 @@ mod test_multimap {
                 std::thread::spawn(move || {
                     for (k, v, is_write) in chunk.iter() {
                         if *is_write {
-                            map.set(UnCloneable(*k), *v as usize);
+                            map.set(UnCloneable(*k), *v);
                         } else {
                             map.get(&UnCloneable(*k));
                         }
@@ -106,8 +106,10 @@ mod test_pool {
     fn test_uses_multiple_threads_5() {
         let pool = ThreadPool::new(4);
 
-        // purposefully deadlock one of the threads in the thread pool
-        pool.execute(move || loop {});
+        // purposefully stall one of the threads in the thread pool without busy-waiting
+        pool.execute(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        });
 
         // Make sure there is some other thread that is still able to run
         // and send a message back to this thread
@@ -117,7 +119,7 @@ mod test_pool {
         });
         match rx.recv() {
             Ok(_) => {}
-            Err(_) => assert!(false, "thread did not make progress"),
+            Err(_) => panic!("thread did not make progress"),
         }
 
         // avoid calling drop on the pool so we don't wait for the deadlocked thread
@@ -352,14 +354,14 @@ mod integration {
 
         let queue = Arc::new(Mutex::new(paths));
         println!("Adding docs...");
-        let now = std::time::Instant::now();
+        let _now = std::time::Instant::now();
         let handles = (0..THREADS)
             .map(|i| {
                 thread::spawn({
                     let queue = Arc::clone(&queue);
                     move || loop {
                         let client = client::Client::new("127.0.0.1", port);
-                        let path = queue.lock().unwrap().pop().clone();
+                        let path = queue.lock().unwrap().pop();
                         match path {
                             Some(path) => {
                                 println!("Thread {}: processing {}", i, path);
@@ -397,7 +399,7 @@ mod integration {
                     let word_queue = Arc::clone(&word_queue);
                     let client = client::Client::new("127.0.0.1", port);
                     move || loop {
-                        let word = word_queue.lock().unwrap().pop().clone();
+                        let word = word_queue.lock().unwrap().pop();
                         match word {
                             Some(word) => {
                                 let response = client.search(&word);

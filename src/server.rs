@@ -89,27 +89,25 @@ impl Server {
         listener.set_nonblocking(true).unwrap();
 
         let server_state = Arc::clone(&self.state);
-        thread::spawn(move || {
-            loop {
-                if server_state.is_stopped.load(Ordering::SeqCst) {
-                    break;
-                }
+        thread::spawn(move || loop {
+            if server_state.is_stopped.load(Ordering::SeqCst) {
+                break;
+            }
 
-                match listener.accept() {
-                    Ok((stream, _addr)) => {
-                        let state = Arc::clone(&server_state);
-                        server_state.pool.execute(move || {
-                            if let Some(request) = Request::from_bytes(&stream) {
-                                process_message(state, request, stream);
-                            }
-                        });
-                    }
-                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        thread::sleep(std::time::Duration::from_millis(10));
-                    }
-                    Err(e) => {
-                        eprintln!("Error accepting connection: {}", e);
-                    }
+            match listener.accept() {
+                Ok((stream, _addr)) => {
+                    let state = Arc::clone(&server_state);
+                    server_state.pool.execute(move || {
+                        if let Some(request) = Request::from_bytes(&stream) {
+                            process_message(state, request, stream);
+                        }
+                    });
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(e) => {
+                    eprintln!("Error accepting connection: {}", e);
                 }
             }
         });
@@ -139,5 +137,11 @@ impl Server {
     }
     pub fn stop(&self) {
         self.state.is_stopped.store(true, Ordering::SeqCst);
+    }
+}
+
+impl Default for Server {
+    fn default() -> Self {
+        Self::new()
     }
 }
