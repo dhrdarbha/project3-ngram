@@ -19,7 +19,12 @@ impl Client {
     // SocketAddr from an IpAddr and a port with `SocketAddr::new(addr, port)`.
     // You can create an IpAddr from a string with `address.parse().unwrap()`.
     pub fn new(address: &str, port: u16) -> Self {
-        todo!()
+        use std::net::{IpAddr, SocketAddr};
+        let ip: IpAddr = address.parse().unwrap();
+        let socket_addr = SocketAddr::new(ip, port);
+        Self {
+            address: socket_addr,
+        }
     }
 
     // TODO:
@@ -32,7 +37,16 @@ impl Client {
     // You can read from the stream by calling your `Response::from_bytes` function, since
     // `TcpStream` implements `Read`.
     fn send(&self, request: &Request) -> Option<Response> {
-        todo!()
+        use std::net::{Shutdown, TcpStream};
+
+        let mut stream = TcpStream::connect(self.address).ok()?;
+
+        let request_bytes = request.to_bytes();
+        stream.write_all(&request_bytes).ok()?;
+
+        stream.shutdown(Shutdown::Write).ok()?;
+
+        Response::from_bytes(stream)
     }
 
     // TODO:
@@ -41,18 +55,24 @@ impl Client {
     //
     // You can read the contents of a file with `let s = std::fs::read_to_string(path)`.
     pub fn publish_from_path(&self, path: &str) -> Option<Response> {
-        todo!()
+        let doc = std::fs::read_to_string(path).ok()?;
+        let request = Request::Publish { doc };
+        self.send(&request)
     }
     // TODO:
     // Send a `Search` request to the server with the given `word`. Return the response from the
     // server.
     pub fn search(&self, word: &str) -> Option<Response> {
-        todo!()
+        let request = Request::Search {
+            word: word.to_string(),
+        };
+        self.send(&request)
     }
     // TODO:
     // Send a `Retrieve` request to the server with the given `id`. Return the response from the
     // server.
     pub fn retrieve(&self, id: usize) -> Option<Response> {
-        todo!()
+        let request = Request::Retrieve { id };
+        self.send(&request)
     }
 }

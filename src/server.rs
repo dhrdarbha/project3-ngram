@@ -19,7 +19,23 @@ const WORKERS: usize = 16;
 // and then creating the appropriate response and turning it into bytes which are sent to along
 // the stream by calling the `write_all` method.
 fn process_message(state: Arc<ServerState>, request: Request, mut stream: TcpStream) {
-    todo!()
+    let response = match request {
+        Request::Publish { doc } => {
+            let id = state.database.publish(doc);
+            Response::PublishSuccess(id)
+        }
+        Request::Search { word } => {
+            let ids = state.database.search(&word);
+            Response::SearchSuccess(ids)
+        }
+        Request::Retrieve { id } => match state.database.retrieve(id) {
+            Some(doc) => Response::RetrieveSuccess(doc),
+            None => Response::Failure,
+        },
+    };
+
+    let response_bytes = response.to_bytes();
+    let _ = stream.write_all(&response_bytes);
 }
 
 /// A struct that contains the state of the server
@@ -48,7 +64,9 @@ impl Server {
     // TODO:
     // Create a new server by using the `ServerState::new` function
     pub fn new() -> Self {
-        todo!()
+        Self {
+            state: Arc::new(ServerState::new()),
+        }
     }
 
     // TODO:
@@ -67,7 +85,34 @@ impl Server {
     // `ServerState` to see if the server has been stopped. If it has, you should break out of the
     // loop and return.
     fn listen(&self, port: u16) {
-        todo!()
+        let listener = TcpListener::bind(("127.0.0.1", port)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+
+        let server_state = Arc::clone(&self.state);
+        thread::spawn(move || {
+            loop {
+                if server_state.is_stopped.load(Ordering::SeqCst) {
+                    break;
+                }
+
+                match listener.accept() {
+                    Ok((stream, _addr)) => {
+                        let state = Arc::clone(&server_state);
+                        server_state.pool.execute(move || {
+                            if let Some(request) = Request::from_bytes(&stream) {
+                                process_message(state, request, stream);
+                            }
+                        });
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    Err(e) => {
+                        eprintln!("Error accepting connection: {}", e);
+                    }
+                }
+            }
+        });
     }
 
     // This function has already been partially completed for you
@@ -86,7 +131,11 @@ impl Server {
         }
 
         // TODO: Call the listen function and then loop (doing nothing) until the server has been stopped
-        todo!()
+        self.listen(port);
+
+        while !self.state.is_stopped.load(Ordering::SeqCst) {
+            thread::sleep(std::time::Duration::from_millis(100));
+        }
     }
     pub fn stop(&self) {
         self.state.is_stopped.store(true, Ordering::SeqCst);
